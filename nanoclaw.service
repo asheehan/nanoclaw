@@ -1,0 +1,22 @@
+[Unit]
+Description=NanoClaw - Personal Claude Assistant
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=nanoclaw
+Group=nanoclaw
+SupplementaryGroups=docker
+WorkingDirectory=/home/nanoclaw/nanoclaw
+ExecStart=/usr/bin/node /home/nanoclaw/nanoclaw/dist/index.js
+Restart=always
+RestartSec=10
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/nanoclaw/.local/bin
+Environment=HOME=/home/nanoclaw
+Environment=ASSISTANT_NAME=Claude
+StandardOutput=append:/home/nanoclaw/nanoclaw/logs/nanoclaw.log
+StandardError=append:/home/nanoclaw/nanoclaw/logs/nanoclaw.error.log
+
+[Install]
+WantedBy=multi-user.target
