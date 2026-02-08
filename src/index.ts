@@ -7,6 +7,7 @@ import makeWASocket, {
   WASocket,
   makeCacheableSignalKeyStore,
   useMultiFileAuthState,
+  downloadMediaMessage,
 } from '@whiskeysockets/baileys';
 import { CronExpressionParser } from 'cron-parser';
 
@@ -224,7 +225,10 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
-    return `<message sender="${escapeXml(m.sender_name)}" time="${m.timestamp}">${escapeXml(m.content)}</message>`;
+
+    // If there's an image, include the path so the agent can read it
+    const imagePath = m.image_path ? ` image="${escapeXml(m.image_path)}"` : '';
+    return `<message sender="${escapeXml(m.sender_name)}" time="${m.timestamp}"${imagePath}>${escapeXml(m.content)}</message>`;
   });
   const prompt = `<messages>\n${lines.join('\n')}\n</messages>`;
 
@@ -703,9 +707,6 @@ async function connectWhatsApp(): Promise<void> {
       const msg =
         'WhatsApp authentication required. Run /setup in Claude Code.';
       logger.error(msg);
-      exec(
-        `osascript -e 'display notification "${msg}" with title "NanoClaw" sound name "Basso"'`,
-      );
       setTimeout(() => process.exit(1), 1000);
     }
 
@@ -763,7 +764,7 @@ async function connectWhatsApp(): Promise<void> {
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('messages.upsert', ({ messages }) => {
+  sock.ev.on('messages.upsert', async ({ messages }) => {
     for (const msg of messages) {
       if (!msg.message) continue;
       const rawJid = msg.key.remoteJid;
@@ -779,6 +780,38 @@ async function connectWhatsApp(): Promise<void> {
       // Always store chat metadata for group discovery
       storeChatMetadata(chatJid, timestamp);
 
+      let imagePath: string | undefined;
+
+      // Download and save image if present
+      if (msg.message.imageMessage && registeredGroups[chatJid]) {
+        try {
+          const buffer = await downloadMediaMessage(
+            msg,
+            'buffer',
+            {},
+            {
+              logger: logger.child({ module: 'media-download' }),
+              reuploadRequest: sock.updateMediaMessage,
+            }
+          );
+
+          if (buffer) {
+            const msgId = msg.key.id || Date.now().toString();
+            const ext = msg.message.imageMessage.mimetype?.includes('png') ? 'png' : 'jpg';
+            const filename = `${msgId}.${ext}`;
+            imagePath = path.join(DATA_DIR, 'sessions', chatJid, 'media', filename);
+
+            // Create media directory if it doesn't exist
+            fs.mkdirSync(path.dirname(imagePath), { recursive: true });
+            fs.writeFileSync(imagePath, buffer);
+
+            logger.info({ chatJid, imagePath }, 'Downloaded and saved image');
+          }
+        } catch (err) {
+          logger.error({ err, chatJid }, 'Failed to download image');
+        }
+      }
+
       // Only store full message content for registered groups
       if (registeredGroups[chatJid]) {
         storeMessage(
@@ -786,6 +819,7 @@ async function connectWhatsApp(): Promise<void> {
           chatJid,
           msg.key.fromMe || false,
           msg.pushName || undefined,
+          imagePath,
         );
       }
     }
@@ -852,7 +886,7 @@ function recoverPendingMessages(): void {
   }
 }
 
-function ensureContainerSystemRunning(): void {
+function ensureDockerRunning(): void {
   try {
     execSync('docker info', { stdio: 'pipe' });
     logger.debug('Docker is available');
@@ -905,7 +939,7 @@ function ensureContainerSystemRunning(): void {
 }
 
 async function main(): Promise<void> {
-  ensureContainerSystemRunning();
+  ensureDockerRunning();
   initDatabase();
   logger.info('Database initialized');
   loadState();
