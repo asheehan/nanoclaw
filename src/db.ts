@@ -87,6 +87,13 @@ export function initDatabase(): void {
     /* column already exists */
   }
 
+  // Add image_path column if it doesn't exist (migration for existing DBs)
+  try {
+    db.exec(`ALTER TABLE messages ADD COLUMN image_path TEXT`);
+  } catch {
+    /* column already exists */
+  }
+
   // State tables (replacing JSON files)
   db.exec(`
     CREATE TABLE IF NOT EXISTS router_state (
@@ -208,6 +215,7 @@ export function storeMessage(
   chatJid: string,
   isFromMe: boolean,
   pushName?: string,
+  imagePath?: string,
 ): void {
   if (!msg.key) return;
 
@@ -224,7 +232,7 @@ export function storeMessage(
   const msgId = msg.key.id || '';
 
   db.prepare(
-    `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     msgId,
     chatJid,
@@ -233,6 +241,7 @@ export function storeMessage(
     content,
     timestamp,
     isFromMe ? 1 : 0,
+    imagePath || null,
   );
 }
 
@@ -246,7 +255,7 @@ export function getNewMessages(
   const placeholders = jids.map(() => '?').join(',');
   // Filter out bot's own messages by checking content prefix (not is_from_me, since user shares the account)
   const sql = `
-    SELECT id, chat_jid, sender, sender_name, content, timestamp
+    SELECT id, chat_jid, sender, sender_name, content, timestamp, image_path
     FROM messages
     WHERE timestamp > ? AND chat_jid IN (${placeholders}) AND content NOT LIKE ?
     ORDER BY timestamp

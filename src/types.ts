@@ -48,6 +48,7 @@ export interface NewMessage {
   sender_name: string;
   content: string;
   timestamp: string;
+  image_path?: string;
 }
 
 export interface ScheduledTask {
