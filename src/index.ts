@@ -777,6 +777,14 @@ async function connectWhatsApp(): Promise<void> {
         Number(msg.messageTimestamp) * 1000,
       ).toISOString();
 
+      // Debug: Log message type
+      logger.debug({
+        chatJid,
+        hasImage: !!msg.message.imageMessage,
+        messageType: Object.keys(msg.message)[0],
+        isRegistered: !!registeredGroups[chatJid]
+      }, 'Message received');
+
       // Always store chat metadata for group discovery
       storeChatMetadata(chatJid, timestamp);
 
@@ -784,6 +792,7 @@ async function connectWhatsApp(): Promise<void> {
 
       // Download and save image if present
       if (msg.message.imageMessage && registeredGroups[chatJid]) {
+        logger.info({ chatJid }, 'Attempting to download image...');
         try {
           const buffer = await downloadMediaMessage(
             msg,
