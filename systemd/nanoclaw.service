@@ -1,0 +1,20 @@
+[Unit]
+Description=NanoClaw WhatsApp Assistant
+After=network.target
+
+[Service]
+Type=simple
+User=nanoclaw
+WorkingDirectory=/home/nanoclaw/nanoclaw
+ExecStart=/usr/local/bin/node /home/nanoclaw/nanoclaw/dist/index.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/nanoclaw/nanoclaw/logs/nanoclaw.log
+StandardError=append:/home/nanoclaw/nanoclaw/logs/nanoclaw.error.log
+
+# Environment variables
+Environment="NODE_ENV=production"
+Environment="ASSISTANT_NAME=Claude"
+
+[Install]
+WantedBy=multi-user.target
