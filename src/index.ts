@@ -818,11 +818,23 @@ async function connectWhatsApp(): Promise<void> {
                            msg.message.videoMessage?.mimetype ||
                            msg.message.documentMessage?.mimetype;
             if (mimetype) {
+              // Images
               if (mimetype.includes('png')) ext = 'png';
               else if (mimetype.includes('jpeg') || mimetype.includes('jpg')) ext = 'jpg';
               else if (mimetype.includes('gif')) ext = 'gif';
+              else if (mimetype.includes('webp')) ext = 'webp';
+              // Videos
               else if (mimetype.includes('mp4')) ext = 'mp4';
+              else if (mimetype.includes('webm')) ext = 'webm';
+              // Documents
               else if (mimetype.includes('pdf')) ext = 'pdf';
+              // Office documents
+              else if (mimetype.includes('spreadsheetml.sheet') || mimetype.includes('ms-excel')) ext = 'xlsx';
+              else if (mimetype.includes('wordprocessingml.document') || mimetype.includes('msword')) ext = 'docx';
+              else if (mimetype.includes('presentationml.presentation') || mimetype.includes('ms-powerpoint')) ext = 'pptx';
+              // Archives
+              else if (mimetype.includes('zip')) ext = 'zip';
+              else if (mimetype.includes('rar')) ext = 'rar';
             }
             const filename = `${msgId}.${ext}`;
             imagePath = path.join(DATA_DIR, 'sessions', chatJid, 'media', filename);
