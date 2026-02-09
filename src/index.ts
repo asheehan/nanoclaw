@@ -777,12 +777,15 @@ async function connectWhatsApp(): Promise<void> {
         Number(msg.messageTimestamp) * 1000,
       ).toISOString();
 
-      // Debug: Log message type
-      logger.debug({
+      // Log message type for debugging
+      logger.info({
         chatJid,
+        messageKeys: Object.keys(msg.message),
         hasImage: !!msg.message.imageMessage,
-        messageType: Object.keys(msg.message)[0],
-        isRegistered: !!registeredGroups[chatJid]
+        hasVideo: !!msg.message.videoMessage,
+        hasDocument: !!msg.message.documentMessage,
+        isRegistered: !!registeredGroups[chatJid],
+        isFromMe: !!msg.key.fromMe
       }, 'Message received');
 
       // Always store chat metadata for group discovery
@@ -790,9 +793,12 @@ async function connectWhatsApp(): Promise<void> {
 
       let imagePath: string | undefined;
 
-      // Download and save image if present
-      if (msg.message.imageMessage && registeredGroups[chatJid]) {
-        logger.info({ chatJid }, 'Attempting to download image...');
+      // Download and save media if present (images, videos, or documents with image mimetypes)
+      const hasMedia = msg.message.imageMessage || msg.message.videoMessage || msg.message.documentMessage;
+      if (hasMedia && registeredGroups[chatJid]) {
+        const mediaType = msg.message.imageMessage ? 'image' :
+                         msg.message.videoMessage ? 'video' : 'document';
+        logger.info({ chatJid, mediaType }, 'Attempting to download media...');
         try {
           const buffer = await downloadMediaMessage(
             msg,
@@ -806,7 +812,18 @@ async function connectWhatsApp(): Promise<void> {
 
           if (buffer) {
             const msgId = msg.key.id || Date.now().toString();
-            const ext = msg.message.imageMessage.mimetype?.includes('png') ? 'png' : 'jpg';
+            // Get extension from mimetype or default based on message type
+            let ext = 'bin';
+            const mimetype = msg.message.imageMessage?.mimetype ||
+                           msg.message.videoMessage?.mimetype ||
+                           msg.message.documentMessage?.mimetype;
+            if (mimetype) {
+              if (mimetype.includes('png')) ext = 'png';
+              else if (mimetype.includes('jpeg') || mimetype.includes('jpg')) ext = 'jpg';
+              else if (mimetype.includes('gif')) ext = 'gif';
+              else if (mimetype.includes('mp4')) ext = 'mp4';
+              else if (mimetype.includes('pdf')) ext = 'pdf';
+            }
             const filename = `${msgId}.${ext}`;
             imagePath = path.join(DATA_DIR, 'sessions', chatJid, 'media', filename);
 
@@ -814,10 +831,10 @@ async function connectWhatsApp(): Promise<void> {
             fs.mkdirSync(path.dirname(imagePath), { recursive: true });
             fs.writeFileSync(imagePath, buffer);
 
-            logger.info({ chatJid, imagePath }, 'Downloaded and saved image');
+            logger.info({ chatJid, imagePath, mimetype }, 'Downloaded and saved media');
           }
         } catch (err) {
-          logger.error({ err, chatJid }, 'Failed to download image');
+          logger.error({ err, chatJid }, 'Failed to download media');
         }
       }
 
